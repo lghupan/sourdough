@@ -53,14 +53,21 @@ void Controller::ack_received( const uint64_t sequence_number_acked,
 {
   /* Default: take no action */
   
+  //static double rtt_old = 100;
   double rtt =  timestamp_ack_received - send_timestamp_acked;
-  if ( rtt < 500 )
-    the_window_size += 0.1;
+
+  if ( rtt < 60 )
+    the_window_size += 0.2;
   else
-    the_window_size *= 0.99;
+    the_window_size -= 0.3;
 
   if ( the_window_size < 5 )
     the_window_size = 5;
+
+  if ( the_window_size > 100 )
+    the_window_size = 100;
+
+  //rtt_old = rtt;
   
   std::cout << rtt << "," << the_window_size << endl;
 
