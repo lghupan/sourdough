@@ -8,13 +8,16 @@ using namespace std;
 /* Default constructor */
 Controller::Controller( const bool debug )
   : debug_( debug )
+  ,the_window_size(50)
 {}
 
 /* Get current window size, in datagrams */
 unsigned int Controller::window_size( void )
 {
   /* Default: fixed window size of 100 outstanding datagrams */
-  unsigned int the_window_size = 50;
+
+  // Need to override default
+  //unsigned int the_window_size = 50;
 
   if ( debug_ ) {
     cerr << "At time " << timestamp_ms()
@@ -49,6 +52,17 @@ void Controller::ack_received( const uint64_t sequence_number_acked,
                                /* when the ack was received (by sender) */
 {
   /* Default: take no action */
+  
+  double rtt =  timestamp_ack_received - send_timestamp_acked;
+  if ( rtt < 500 )
+    the_window_size += 0.1;
+  else
+    the_window_size *= 0.99;
+
+  if ( the_window_size < 5 )
+    the_window_size = 5;
+  
+  std::cout << rtt << "," << the_window_size << endl;
 
   if ( debug_ ) {
     cerr << "At time " << timestamp_ack_received
