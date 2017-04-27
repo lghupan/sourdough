@@ -1,4 +1,10 @@
 #include <iostream>
+#include <cstdio>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <array>
+
 
 #include "controller.hh"
 #include "timestamp.hh"
@@ -9,6 +15,8 @@ using namespace std;
 Controller::Controller( const bool debug )
   : debug_( debug )
   ,the_window_size(50)
+  ,hist_rtt(30)
+  ,min_rtt(100)
 {}
 
 /* Get current window size, in datagrams */
@@ -41,6 +49,7 @@ void Controller::datagram_was_sent( const uint64_t sequence_number,
   }
 }
 
+
 /* An ack was received */
 void Controller::ack_received( const uint64_t sequence_number_acked,
 			       /* what sequence number was acknowledged */
@@ -52,24 +61,46 @@ void Controller::ack_received( const uint64_t sequence_number_acked,
                                /* when the ack was received (by sender) */
 {
   /* Default: take no action */
-  
-  //static double rtt_old = 100;
+
   double rtt =  timestamp_ack_received - send_timestamp_acked;
+  // update min rtt
+  if ( rtt < min_rtt )
+    min_rtt = rtt;
 
-  if ( rtt < 60 )
-    the_window_size += 0.2;
-  else
-    the_window_size -= 0.3;
-
-  if ( the_window_size < 5 )
-    the_window_size = 5;
-
-  if ( the_window_size > 100 )
-    the_window_size = 100;
-
-  //rtt_old = rtt;
+  // Exponential Smoothing
+  double discounting_factor = 0.95;
+  double accumulate_rtt = discounting_factor*rtt + ( 1.0 - discounting_factor ) * hist_rtt;
+  hist_rtt = accumulate_rtt;
   
-  std::cout << rtt << "," << the_window_size << endl;
+  // Estimate queue length
+  double est_queue = accumulate_rtt - min_rtt;
+  
+
+  if ( est_queue < 0.3 * min_rtt ){
+    // safe, increase slowly
+    the_window_size += 0.25;
+    if (est_queue < 0.1 * min_rtt){
+      // very safe, increase faster
+      the_window_size += 0.5;
+    }
+  }
+  else
+    if (est_queue > 3 * min_rtt){
+      // very long queue, decrease fast
+      the_window_size *= 0.5;
+    }
+    else
+      // decrease slowly
+      the_window_size -= 0.25;
+
+  if ( the_window_size < 1 )
+    the_window_size = 1;
+
+  if ( the_window_size > 200 )
+    the_window_size = 200;
+  
+  //std::cout << "rtt, window_size, accumulate_rtt, min_rtt" << endl;
+  //std::cout << rtt << "," << the_window_size << "," << accumulate_rtt << "," << min_rtt << endl;
 
   if ( debug_ ) {
     cerr << "At time " << timestamp_ack_received
@@ -84,5 +115,8 @@ void Controller::ack_received( const uint64_t sequence_number_acked,
    before sending one more datagram */
 unsigned int Controller::timeout_ms( void )
 {
-  return 1000; /* timeout of one second */
+  // change timeout to p*min_rtt
+  //return 1000; /* timeout of one second */
+  return 0.75*min_rtt;
 }
+

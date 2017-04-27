@@ -12,6 +12,8 @@ private:
 
   /* Add member variables here */
   double the_window_size;
+  double hist_rtt;
+  double min_rtt;
 
 public:
   /* Public interface for the congestion controller */
